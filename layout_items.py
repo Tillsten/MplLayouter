@@ -90,8 +90,8 @@ class Box(object):
         sol.updateVariables()
 
     def get_mpl_rect(self):
-        return (round(self.left.value()), round(self.bottom.value()),
-                round(self.width.value()), round(self.height.value()))
+        return (self.left.value(), self.bottom.value(),
+                self.width.value(), self.height.value())
 
     def __repr__(self):
         args = (self.name, self.left.value(), self.bottom.value(),
@@ -190,6 +190,7 @@ class TextContainer(Box):
     def set_mpl_text(self, txt):
         self.mpl_text = txt
         txt.set_figure(self.parent.figure)
+        self.parent.figure.texts.append(txt)
         text_ex = get_text_size(txt, self.parent.renderer)
         self.solver.suggestValue(self.min_width, text_ex[0])
         self.solver.suggestValue(self.min_height, text_ex[1])
@@ -199,7 +200,7 @@ class TextContainer(Box):
         if txt is not None:
             txt.set_position((self.left.value(),
                               self.bottom.value()))
-            self.parent.figure.texts.append(txt)
+
 
 def contains(parent, child):
     c = [parent.left <= child.left,
