@@ -103,6 +103,10 @@ class GridLayout(object):
 
     def __init__(self, rows, cols, width=100, height=100):
         self.rows, self.cols = rows, cols
+        self.calc_borders(width, height)
+
+    def calc_borders(self, width, height):
+        cols, rows = self.cols, self.rows
         self.left_borders = [width / cols * i for i in range(cols)]
         self.right_borders = [width / cols * i for i in range(cols + 1)]
         self.top_borders = [height - height / rows * i for i in range(rows)]
@@ -197,22 +201,27 @@ class TextContainer(Box):
                               self.bottom.value()))
             self.parent.figure.texts.append(txt)
 
+def contains(parent, child):
+    c = [parent.left <= child.left,
+         parent.bottom <= child.bottom,
+         parent.right >= child.right,
+         parent.top >= child.top,
+        ]
+    return c
+
 class RawAxesContainer(Box):
     def __init__(self, parent, name):
         super(RawAxesContainer, self).__init__(parent, name)
         self.adjusted_axes_box = Box()
-        print(self, parent.figure)
+
         self.axes = parent.figure.add_axes([0, 0, 0.1, 0.1], label=str(id(self)))
-        print(self.axes)
+
     def place(self):
         figure = self.parent.figure
         renderer = self.parent.renderer
-        print(self, figure)
-
         invTransFig = figure.transFigure.inverted().transform_bbox
         box = matplotlib.transforms.Bbox.from_bounds(*self.get_mpl_rect())
         bbox = invTransFig(box)
-        print(self.axes.get_figure(), id(figure.get_axes()[0]), id(self.axes))
         self.axes.set_position(bbox)
         tight_bbox = self.axes.get_tightbbox(renderer)
         tight_bbox = invTransFig(tight_bbox)
@@ -329,15 +338,13 @@ class FigureLayout(Box):
         row_splits = [height/rows * i for i in range(rows)]
 
 if __name__ == '__main__':
-    fig2 = plt.figure(0, dpi=120)
+    fig2 = plt.figure(0, dpi=100)
     fl = FigureLayout(fig2)
     ac1 = AxesContainer(fl)
     ac2 = AxesContainer(fl)
     ac3 = AxesContainer(fl)
     gl = GridLayout(2, 2, fig2.bbox.width, fig2.bbox.height)
-    gl.place_rect(ac1, (0, 0))
-    gl.place_rect(ac2, (0, 1), rowspan=2)
-    gl.place_rect(ac3, (1, 0))
+
     fl.solver.addConstraint(ac1.top_label.v_center == ac2.top_label.v_center)
     fl.solver.addConstraint(ac1.raw_axes.right == ac3.raw_axes.right)
 
@@ -349,10 +356,16 @@ if __name__ == '__main__':
     ac3.add_label('Wavenumbers / [cm]', 'right')
 
     ac1.raw_axes.axes.xaxis.set_ticks_position('top')
-    for a in [ac1, ac2, ac3]:
-        a.do_layout()
 
+    def do_lay(ev):
+        gl.calc_borders(fig2.bbox.width, fig2.bbox.height)
+        gl.place_rect(ac1, (0, 0))
+        gl.place_rect(ac2, (0, 1), rowspan=2)
+        gl.place_rect(ac3, (1, 0))
+        for a in [ac1, ac2, ac3]:
+            a.do_layout()
 
+    cid = fig2.canvas.mpl_connect('resize_event', do_lay)
 
 
     # print(ac)
