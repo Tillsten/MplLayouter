@@ -9,7 +9,7 @@ matplotlib.use('qt4agg')
 from matplotlib import pyplot as plt
 
 Variable = kiwi.Variable
-sol = kiwi.Solver()
+
 plt.ion()
 plt.close('all')
 
@@ -19,10 +19,15 @@ class Box(object):
     Basic rectangle representation using variables
     """
 
-    def __init__(self, name='', solver=sol, lower_left=(0, 0), upper_right=(1, 1), padding=0.1):
+    def __init__(self, parent=None, name='',
+                 lower_left=(0, 0), upper_right=(1, 1)):
+        self.parent = parent
         self.name = name
         sn = self.name + '_'
-        self.solver = sol
+        if parent is None:
+            self.solver = kiwi.Solver()
+        else:
+            self.solver = parent.solver
         self.top = Variable(sn + 'top')
         self.bottom = Variable(sn + 'bottom')
         self.left = Variable(sn + 'left')
@@ -43,6 +48,7 @@ class Box(object):
         self.add_constraints()
 
     def add_constraints(self):
+        sol = self.solver
         for i in [self.min_width, self.min_height]:
             sol.addEditVariable(i, 1e9)
             sol.suggestValue(i, 0)
@@ -61,6 +67,7 @@ class Box(object):
             self.solver.addConstraint(c)
 
     def soft_constraints(self):
+        sol = self.solver
         for i in [self.pref_width, self.pref_height]:
             sol.addEditVariable(i, 'strong')
             sol.suggestValue(i, 0)
@@ -165,25 +172,21 @@ def vstack(items, padding=0):
         constraints.append(items[i-1].bottom-padding >= items[i].top)
     return constraints
 
-fig = plt.figure(dpi=120)
 
-
-def get_text_size(mpl_txt):
-    f = plt.gcf()
-    r = f.canvas.get_renderer()
-    bbox = mpl_txt.get_window_extent(r)
+def get_text_size(mpl_txt, renderer):
+    bbox = mpl_txt.get_window_extent(renderer)
     return bbox.width, bbox.height
 
 
 class TextContainer(Box):
-    def __init__(self, name):
-        super(TextContainer, self).__init__(name)
+    def __init__(self, parent, name):
+        super(TextContainer, self).__init__(parent, name)
         self.mpl_text = None
 
     def set_mpl_text(self, txt):
         self.mpl_text = txt
-        txt.set_figure(fig)
-        text_ex = get_text_size(txt)
+        txt.set_figure(self.parent.figure)
+        text_ex = get_text_size(txt, self.parent.renderer)
         self.solver.suggestValue(self.min_width, text_ex[0])
         self.solver.suggestValue(self.min_height, text_ex[1])
 
@@ -192,51 +195,58 @@ class TextContainer(Box):
         if txt is not None:
             txt.set_position((self.left.value(),
                               self.bottom.value()))
-            fig.texts.append(txt)
+            self.parent.figure.texts.append(txt)
 
 class RawAxesContainer(Box):
-    def __init__(self, name):
-        super(RawAxesContainer, self).__init__(name)
+    def __init__(self, parent, name):
+        super(RawAxesContainer, self).__init__(parent, name)
         self.adjusted_axes_box = Box()
-
-    def set_axes(self, ax):
-        self.axes = ax
-
+        print(self, parent.figure)
+        self.axes = parent.figure.add_axes([0, 0, 0.1, 0.1], label=str(id(self)))
+        print(self.axes)
     def place(self):
+        figure = self.parent.figure
+        renderer = self.parent.renderer
+        print(self, figure)
+
+        invTransFig = figure.transFigure.inverted().transform_bbox
         box = matplotlib.transforms.Bbox.from_bounds(*self.get_mpl_rect())
-        invTransFig = fig.transFigure.inverted().transform_bbox
-        rect = invTransFig(box)
-        if not hasattr(self, 'ax'):
-            self.axes = fig.add_axes(rect)
-        ax = self.axes
-        ax.set_position(rect)
-        bbox = ax.get_tightbbox(fig.canvas.get_renderer())
-        bbox = invTransFig(bbox)
-        dx = rect.xmin-bbox.xmin
-        dx2 = rect.xmax-bbox.xmax
-        dy = rect.ymin-bbox.ymin
-        dy2 = rect.ymax-bbox.ymax
-        new_size = (rect.x0 + dx, rect.y0 + dy,
-                    rect.width - dx + dx2, rect.height - dy + dy2)
-        ax.set_position(new_size)
-        self.adjusted_axes_box.set_geometry(*new_size)
+        bbox = invTransFig(box)
+        print(self.axes.get_figure(), id(figure.get_axes()[0]), id(self.axes))
+        self.axes.set_position(bbox)
+        tight_bbox = self.axes.get_tightbbox(renderer)
+        tight_bbox = invTransFig(tight_bbox)
+        dx = bbox.xmin-tight_bbox.xmin
+        dx2 = bbox.xmax-tight_bbox.xmax
+        dy = bbox.ymin-tight_bbox.ymin
+        dy2 = bbox.ymax-tight_bbox.ymax
+        new_size = (bbox.x0 + dx, bbox.y0 + dy,
+                    bbox.width - dx + dx2, bbox.height - dy + dy2)
+        self.axes.set_position(new_size)
+        #print(new_size, ax.get_position())
+        #self.adjusted_axes_box.set_geometry(*new_size)
         #sol.suggestValue(self.adjusted_axes_box.min_width, new_size[2])
 
 class AxesContainer(Box):
-    def __init__(self, name):
-        super(AxesContainer, self).__init__(name)
+    def __init__(self, parent, name='ac'):
+        super(AxesContainer, self).__init__(parent, name)
         self.children = []
-        self.raw_axes = RawAxesContainer('ax')
-        self.top_title = TextContainer('tt')
-        self.left_label = TextContainer('ll')
-        self.right_label = TextContainer('rl')
-        self.top_label = TextContainer('tl')
-        self.bottom_label = TextContainer('bl')
+
+        self.parent = parent
+        self.figure = parent.figure
+        self.renderer = parent.renderer
+        self.solver = parent.solver
+
+        self.raw_axes = RawAxesContainer(self, 'ax')
+        self.top_title = TextContainer(self, 'tt')
+        self.left_label = TextContainer(self, 'll')
+        self.right_label = TextContainer(self, 'rl')
+        self.top_label = TextContainer(self, 'tl')
+        self.bottom_label = TextContainer(self,'bl')
 
         self.children = [self.top_title, self.top_label, self.bottom_label,
                          self.left_label, self.right_label, self.raw_axes]
         self.padding = Variable(name + '_padding')
-
 
         self.solver.addEditVariable(self.padding, 'weak')
         self.solver.suggestValue(self.padding, 10)
@@ -290,6 +300,7 @@ class AxesContainer(Box):
         for c in self.children:
             c.place()
 
+
 def find_renderer(fig):
     if hasattr(fig.canvas, "get_renderer"):
         renderer = fig.canvas.get_renderer()
@@ -301,9 +312,12 @@ def find_renderer(fig):
 
 
 class FigureLayout(Box):
-    def __init__(self):
-        self.solver = kiwi.Solver()
+    def __init__(self, mpl_figure):
+        Box.__init__(self, None, 'fl')
         self.children = []
+        self.figure = mpl_figure
+        self.renderer = find_renderer(mpl_figure)
+        self.set_geometry(0, 0, mpl_figure.bbox.width, mpl_figure.bbox.height)
         self.parent = None
 
     def grid_layout(self, size, hspace=0.1):
@@ -315,28 +329,32 @@ class FigureLayout(Box):
         row_splits = [height/rows * i for i in range(rows)]
 
 if __name__ == '__main__':
-    ac = AxesContainer('ac')
-    ac2 = AxesContainer('ac2')
-    ac3 = AxesContainer('ac3')
-    gl = GridLayout(2, 2, fig.bbox.width, fig.bbox.height)
-    gl.place_rect(ac, (0, 0))
+    fig2 = plt.figure(0, dpi=120)
+    fl = FigureLayout(fig2)
+    ac1 = AxesContainer(fl)
+    ac2 = AxesContainer(fl)
+    ac3 = AxesContainer(fl)
+    gl = GridLayout(2, 2, fig2.bbox.width, fig2.bbox.height)
+    gl.place_rect(ac1, (0, 0))
     gl.place_rect(ac2, (0, 1), rowspan=2)
     gl.place_rect(ac3, (1, 0))
-    sol.addConstraint(ac.top_label.v_center == ac2.top_label.v_center)
-    sol.addConstraint(ac.raw_axes.right == ac3.raw_axes.right)
+    fl.solver.addConstraint(ac1.top_label.v_center == ac2.top_label.v_center)
+    fl.solver.addConstraint(ac1.raw_axes.right == ac3.raw_axes.right)
 
     # ac.add_label('title', 'title')
-    ac.add_label('hallo', 'top')
+    ac1.add_label('hallo', 'top')
     ac2.add_label('sda', 'top')
     ac2.add_label('title2', 'title')
     ac2.add_label('left', 'left')
     ac3.add_label('Wavenumbers / [cm]', 'right')
-    for a in [ac, ac2, ac3]:
+
+    ac1.raw_axes.axes.xaxis.set_ticks_position('top')
+    for a in [ac1, ac2, ac3]:
         a.do_layout()
 
-    ac.raw_axes.ax.xaxis.set_ticks_position('top')
-    ac.do_layout()
-    print(ac.top_title, '\n', ac.top_label)
+
+
 
     # print(ac)
-    fig.show()
+    fig2.show()
+
