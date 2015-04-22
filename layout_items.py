@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 
 Variable = kiwi.Variable
 
-plt.ion()
+
 plt.close('all')
 
 
@@ -348,16 +348,18 @@ if __name__ == '__main__':
 
     fl.solver.addConstraint(ac1.top_label.v_center == ac2.top_label.v_center)
     fl.solver.addConstraint(ac1.raw_axes.right == ac3.raw_axes.right)
+    fl.solver.addConstraint(ac1.left_label.right == ac3.left_label.right)
 
     # ac.add_label('title', 'title')
     ac1.add_label('hallo', 'top')
+    ac1.add_label('Abo', 'left')
     ac2.add_label('sda', 'top')
     ac2.add_label('title2', 'title')
     ac2.add_label('left', 'left')
-    ac3.add_label('Wavenumbers / [cm]', 'right')
+    ac3.add_label('Wavenumbers / [cm]', 'left')
 
     ac1.raw_axes.axes.xaxis.set_ticks_position('top')
-
+    ac1.raw_axes.axes.plot([1000, 50000, 100000])
     def do_lay(ev):
         gl.calc_borders(fig2.bbox.width, fig2.bbox.height)
         gl.place_rect(ac1, (0, 0))
