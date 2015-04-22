@@ -202,7 +202,7 @@ class RawAxesContainer(Box):
     def set_axes(self, ax):
         self.axes = ax
 
-    def place(self):         
+    def place(self):
         box = matplotlib.transforms.Bbox.from_bounds(*self.get_mpl_rect())
         invTransFig = fig.transFigure.inverted().transform_bbox
         rect = invTransFig(box)
@@ -219,7 +219,7 @@ class RawAxesContainer(Box):
         new_size = (rect.x0 + dx, rect.y0 + dy,
                     rect.width - dx + dx2, rect.height - dy + dy2)
         ax.set_position(new_size)
-        self.adjusted_axes_box.set_geometry(new_size)
+        self.adjusted_axes_box.set_geometry(*new_size)
         #sol.suggestValue(self.adjusted_axes_box.min_width, new_size[2])
 
 class AxesContainer(Box):
